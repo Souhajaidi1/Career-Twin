@@ -1,0 +1,33 @@
+server:
+  port: 8083
+  shutdown: graceful
+
+spring:
+  application:
+    name: job-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/job}
+    username: ${DB_USER:careertwin}
+    password: ${DB_PASSWORD:careertwin}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      roles: ADMIN
+
+careertwin:
+  jwt:
+    issuer: careertwin-identity
+    public-key: ${JWT_PUBLIC_KEY}
+  career-service:
+    url: ${CAREER_SERVICE_URL:http://localhost:8082}
+    timeout: PT3S
