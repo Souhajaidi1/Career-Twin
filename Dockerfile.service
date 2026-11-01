@@ -1,0 +1,31 @@
+# One Dockerfile for every Java service. Build with:
+#   docker build -f Dockerfile.service --build-arg MODULE=career-service -t careertwin-career .
+FROM maven:3.9-eclipse-temurin-21 AS build
+ARG MODULE
+WORKDIR /build
+
+# Poms first, so dependency resolution is cached until a pom changes.
+COPY pom.xml .
+COPY career-engine/pom.xml career-engine/
+COPY security-lib/pom.xml security-lib/
+COPY identity-service/pom.xml identity-service/
+COPY career-service/pom.xml career-service/
+COPY job-service/pom.xml job-service/
+COPY api-gateway/pom.xml api-gateway/
+RUN mvn -B -q -pl ${MODULE} -am dependency:go-offline || true
+
+COPY career-engine career-engine
+COPY security-lib security-lib
+COPY identity-service identity-service
+COPY career-service career-service
+COPY job-service job-service
+COPY api-gateway api-gateway
+RUN mvn -B -q -pl ${MODULE} -am package -DskipTests
+
+FROM eclipse-temurin:21-jre-alpine
+ARG MODULE
+WORKDIR /app
+RUN addgroup -S careertwin && adduser -S careertwin -G careertwin
+USER careertwin
+COPY --from=build --chown=careertwin:careertwin /build/${MODULE}/target/*-exec.jar app.jar
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]

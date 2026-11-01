@@ -1,0 +1,61 @@
+# Local stack: PostgreSQL, three services, a gateway and the Angular client.
+#   cp .env.example .env && ./scripts/generate-keys.sh >> .env && docker compose up --build
+x-service-env: &service-env
+  DB_USER: careertwin
+  DB_PASSWORD: ${DB_PASSWORD:-careertwin}
+  JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?run scripts/generate-keys.sh and add the output to .env}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: careertwin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-careertwin}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U careertwin -d identity"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  identity-service:
+    build: { context: ., dockerfile: Dockerfile.service, args: { MODULE: identity-service } }
+    depends_on: { db: { condition: service_healthy } }
+    # Only the identity service holds the private key. The others can verify tokens but never mint them.
+    environment:
+      <<: *service-env
+      DB_URL: jdbc:postgresql://db:5432/identity
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?run scripts/generate-keys.sh and add the output to .env}
+
+  career-service:
+    build: { context: ., dockerfile: Dockerfile.service, args: { MODULE: career-service } }
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      <<: *service-env
+      DB_URL: jdbc:postgresql://db:5432/career
+
+  job-service:
+    build: { context: ., dockerfile: Dockerfile.service, args: { MODULE: job-service } }
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      <<: *service-env
+      DB_URL: jdbc:postgresql://db:5432/job
+      CAREER_SERVICE_URL: http://career-service:8082
+
+  api-gateway:
+    build: { context: ., dockerfile: Dockerfile.service, args: { MODULE: api-gateway } }
+    environment:
+      IDENTITY_URL: http://identity-service:8081
+      CAREER_URL: http://career-service:8082
+      JOB_URL: http://job-service:8083
+
+  frontend:
+    build: ./frontend
+    depends_on: [api-gateway]
+    ports:
+      - "4200:80"
+
+volumes:
+  db-data:
