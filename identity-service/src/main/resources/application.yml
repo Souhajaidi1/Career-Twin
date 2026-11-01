@@ -1,0 +1,36 @@
+server:
+  port: 8081
+  shutdown: graceful
+
+spring:
+  application:
+    name: identity-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/identity}
+    username: ${DB_USER:careertwin}
+    password: ${DB_PASSWORD:careertwin}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      roles: ADMIN
+
+careertwin:
+  jwt:
+    issuer: careertwin-identity
+    public-key: ${JWT_PUBLIC_KEY}
+  security:
+    public-paths: /api/v1/auth/register,/api/v1/auth/login
+  identity:
+    token:
+      ttl: PT30M
+      private-key: ${JWT_PRIVATE_KEY}
